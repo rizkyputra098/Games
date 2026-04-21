@@ -215,8 +215,74 @@
         color: #ff6b6b;
         font-size: 14px;
         font-weight: 800;
-        margin-bottom: 18px;
+        margin-bottom: 10px;
       }
+
+      /* ===== LIVES BAR ===== */
+      #livesBar {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 14px;
+        opacity: 0;
+        animation: fadeIn 0.5s 1s forwards;
+      }
+      .life-heart {
+        font-size: 22px;
+        transition:
+          transform 0.3s,
+          opacity 0.3s,
+          filter 0.3s;
+        filter: drop-shadow(0 0 4px rgba(255, 100, 150, 0.6));
+      }
+      .life-heart.lost {
+        opacity: 0.18;
+        filter: none;
+        transform: scale(0.75);
+      }
+      /* Bomb hit flash overlay */
+      #bombFlash {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: rgba(255, 50, 50, 0.55);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      #bombFlash.flash {
+        opacity: 1;
+      }
+
+      /* Bomb warning toast */
+      #bombToast {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-80px);
+        background: rgba(30, 10, 10, 0.9);
+        border: 1.5px solid rgba(255, 80, 80, 0.5);
+        backdrop-filter: blur(8px);
+        color: #fff;
+        font-family: "Nunito", sans-serif;
+        font-size: 15px;
+        font-weight: 900;
+        padding: 10px 24px;
+        border-radius: 30px;
+        z-index: 101;
+        pointer-events: none;
+        transition:
+          transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+          opacity 0.4s;
+        opacity: 0;
+        white-space: nowrap;
+      }
+      #bombToast.show {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+
       .grid {
         display: grid;
         grid-template-columns: repeat(4, 68px);
@@ -493,7 +559,7 @@
         transform: scale(1.06);
       }
 
-      /* ===== S7: ISI SURAT ===== */
+      /* S7: ISI SURAT */
       #s7 {
         background: linear-gradient(
           160deg,
@@ -531,7 +597,6 @@
         backdrop-filter: blur(10px);
         box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
         text-align: left;
-        /* entrance animation */
         opacity: 0;
         transform: translateY(28px) scale(0.96);
         animation: cardSlideIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.15s
@@ -582,7 +647,6 @@
         font-weight: 900;
         margin-bottom: 16px;
         line-height: 1.5;
-        /* starts hidden, revealed by JS */
         opacity: 0;
       }
       .letter-title.tw-done {
@@ -622,8 +686,6 @@
         opacity: 1;
         transform: translateY(0);
       }
-
-      /* WA BUTTON - smooth entrance */
       .wa-btn-wrap {
         position: relative;
         z-index: 2;
@@ -661,8 +723,6 @@
         opacity: 0.88;
         transform: scale(1.04);
       }
-
-      /* cursor for letter body */
       .cursor-letter {
         display: inline-block;
         width: 2px;
@@ -710,8 +770,6 @@
           opacity: 0;
         }
       }
-
-      /* WIN CONFETTI */
       .confetti-piece {
         position: fixed;
         z-index: 90;
@@ -859,6 +917,11 @@
     </style>
   </head>
   <body>
+    <!-- Bomb flash overlay -->
+    <div id="bombFlash"></div>
+    <!-- Bomb toast -->
+    <div id="bombToast"></div>
+
     <div id="app">
       <div id="bf">
         <svg viewBox="0 0 52 44" xmlns="http://www.w3.org/2000/svg">
@@ -1008,6 +1071,11 @@
       <div id="s4" class="screen sky">
         <h2 id="h2S4"></h2>
         <p class="sub" id="subS4"></p>
+        <!-- LIVES BAR -->
+        <div id="livesBar">
+          <span class="life-heart" id="lh0">❤️</span>
+          <span class="life-heart" id="lh1">❤️</span>
+        </div>
         <div class="grid" id="grid"></div>
         <div class="dots" style="margin-top: 24px">
           <div class="dot"></div>
@@ -1176,6 +1244,79 @@
           "Hii!! aku menang gosok kartunya 🎉 Congratulationn Sayanggkuuu 😍",
       };
 
+      /* ===== LIVES SYSTEM ===== */
+      var MAX_LIVES = 2;
+      var bombLives = MAX_LIVES;
+      var bombBlocked = false; // prevent double-trigger during animation
+
+      var toastMessages = [
+        "Aduh! Kena Bom!! 💥 Sisa {n} nyawa lagi!",
+        "Hampir!! 💥 Masih ada {n} kesempatan!",
+      ];
+
+      function updateLivesUI() {
+        for (var i = 0; i < MAX_LIVES; i++) {
+          var h = document.getElementById("lh" + i);
+          if (!h) continue;
+          if (i < bombLives) {
+            h.classList.remove("lost");
+          } else {
+            h.classList.add("lost");
+          }
+        }
+      }
+
+      function showBombToast(livesLeft) {
+        var toast = document.getElementById("bombToast");
+        var msgs = [
+          "💥 BOOM!! Sisa " + livesLeft + " nyawa lagi!",
+          "😱 DUAR!! Masih " + livesLeft + " nyawa nih!",
+        ];
+        toast.textContent = msgs[Math.floor(Math.random() * msgs.length)];
+        toast.classList.add("show");
+        setTimeout(function () {
+          toast.classList.remove("show");
+        }, 2200);
+      }
+
+      function bombFlash() {
+        var fl = document.getElementById("bombFlash");
+        fl.classList.add("flash");
+        setTimeout(function () {
+          fl.classList.remove("flash");
+        }, 320);
+      }
+
+      function onBombHit() {
+        if (bombBlocked) return;
+        bombBlocked = true;
+
+        bombLives--;
+        bombFlash();
+        updateLivesUI();
+
+        // Shake the whole grid
+        var grid = document.getElementById("grid");
+        grid.style.animation = "shake .4s";
+        setTimeout(function () {
+          grid.style.animation = "";
+        }, 450);
+
+        if (bombLives <= 0) {
+          // Game over — go to lose screen
+          setTimeout(function () {
+            goTo(5);
+          }, 700);
+        } else {
+          // Show toast and rebuild grid after short delay
+          showBombToast(bombLives);
+          setTimeout(function () {
+            buildGrid(); // Rebuild with new random bomb
+            bombBlocked = false;
+          }, 900);
+        }
+      }
+
       /* ===== TYPEWRITER (generic) ===== */
       let twTimer = null;
       function typewrite(el, text, delay, startDelay) {
@@ -1235,18 +1376,14 @@
         setTimeout(next, startDelay);
       }
 
-      /* ===== TYPEWRITER for WIN LETTER (HTML segments) ===== */
-      // Animates segments of the letter body one by one with typing effect
+      /* ===== TYPEWRITER for WIN LETTER ===== */
       function typewriteLetterBody(bodyEl, titleEl, signEl, onDone) {
         titleEl.style.opacity = "1";
         titleEl.innerHTML = "";
-
         const titleText = "Kamu Tau Ngga? 🫵💭 — 𖹭.ᐟ";
         const titleCur = document.createElement("span");
         titleCur.className = "cursor-letter";
         titleEl.appendChild(titleCur);
-
-        // Segments: each has plain text + optional html suffix
         const segments = [
           {
             pre: "Menurut ",
@@ -1278,28 +1415,21 @@
           },
           { pre: "", hl2: "1000% kesayangankuuu 🫣❤️" },
         ];
-
         const signText =
           "── ᯓᡣ𐭩 Lopyuu ayangkuu tersayang, termanis, terlucu, terimuutttt sehat terus yaa sayanggg 😍😋🩷";
-
-        let titleDone = false;
-        let bodyDone = false;
-
+        let titleDone = false,
+          bodyDone = false;
         function checkAllDone() {
           if (titleDone && bodyDone) {
-            // Show sign
             setTimeout(() => {
               signEl.textContent = signText;
               signEl.classList.add("show");
-              // Then show WA button
               setTimeout(() => {
                 if (onDone) onDone();
               }, 700);
             }, 400);
           }
         }
-
-        // Type title
         let ti = 0;
         const titleChars = [...titleText];
         function typeTitle() {
@@ -1316,15 +1446,11 @@
           }
         }
         setTimeout(typeTitle, 300);
-
-        // Type body
         bodyEl.innerHTML = "";
         const bodyCur = document.createElement("span");
         bodyCur.className = "cursor-letter";
         bodyEl.appendChild(bodyCur);
-
-        let si = 0; // segment index
-
+        let si = 0;
         function buildNextSegment() {
           if (si >= segments.length) {
             setTimeout(() => bodyCur.remove(), 500);
@@ -1334,7 +1460,6 @@
           }
           const seg = segments[si];
           si++;
-
           if (seg.raw) {
             const node = document.createElement("span");
             node.innerHTML = seg.raw;
@@ -1342,9 +1467,7 @@
             setTimeout(buildNextSegment, 120);
             return;
           }
-
           if (seg.hl2) {
-            // Big highlight line - type it
             const wrapper = document.createElement("span");
             wrapper.style.cssText =
               "font-size:17px;color:#ffb3c6;font-weight:700;";
@@ -1362,38 +1485,27 @@
             typeHL2();
             return;
           }
-
-          // Build segment: pre (plain) + bold + post (plain) + hl + br
-          const segContainer = document.createDocumentFragment();
           let allText = [];
           if (seg.pre) allText.push({ text: seg.pre, type: "plain" });
           if (seg.bold) allText.push({ text: seg.bold, type: "bold" });
           if (seg.post) allText.push({ text: seg.post, type: "plain" });
           if (seg.hl) allText.push({ text: seg.hl, type: "hl" });
-
-          // Create all span nodes upfront (hidden)
           let spans = [];
           allText.forEach((part) => {
             let span;
-            if (part.type === "bold") {
-              span = document.createElement("b");
-            } else if (part.type === "hl") {
+            if (part.type === "bold") span = document.createElement("b");
+            else if (part.type === "hl") {
               span = document.createElement("span");
               span.className = "hl";
-            } else {
-              span = document.createElement("span");
-            }
+            } else span = document.createElement("span");
             span.textContent = "";
             bodyEl.insertBefore(span, bodyCur);
             spans.push({ span, text: part.text });
           });
-
-          // Flatten all chars across spans
           let allChars = [];
           spans.forEach(({ span, text }) => {
             [...text].forEach((ch) => allChars.push({ span, ch }));
           });
-
           let idx = 0;
           function typeSegChar() {
             if (idx < allChars.length) {
@@ -1410,8 +1522,6 @@
           }
           typeSegChar();
         }
-
-        // Start body after title begins
         setTimeout(buildNextSegment, 900);
       }
 
@@ -1432,16 +1542,7 @@
             const el = document.createElement("div");
             el.className = "confetti-piece";
             const size = 6 + Math.random() * 8;
-            el.style.cssText = `
-              left: ${Math.random() * 100}vw;
-              top: -10px;
-              width: ${size}px;
-              height: ${size}px;
-              background: ${colors[Math.floor(Math.random() * colors.length)]};
-              animation-duration: ${1.8 + Math.random() * 2}s;
-              animation-delay: ${Math.random() * 0.5}s;
-              opacity: 1;
-            `;
+            el.style.cssText = `left:${Math.random() * 100}vw;top:-10px;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random() * colors.length)]};animation-duration:${1.8 + Math.random() * 2}s;animation-delay:${Math.random() * 0.5}s;opacity:1;`;
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 4000);
           }, i * 40);
@@ -1581,7 +1682,6 @@
           started = true;
           startButterfly();
         }
-
         function resetAv(id, url) {
           var av = document.getElementById(id);
           av.style.animation = "none";
@@ -1590,7 +1690,6 @@
           av.style.animation =
             "popIn .6s cubic-bezier(.34,1.56,.64,1) .1s forwards";
         }
-
         if (n === 2) {
           resetAv("avS2", cfg.gifS2);
           typewrite(document.getElementById("h2S2"), cfg.txtS2);
@@ -1603,6 +1702,16 @@
           ]);
         }
         if (n === 4) {
+          // Reset lives
+          bombLives = MAX_LIVES;
+          bombBlocked = false;
+          updateLivesUI();
+          // Reset livesBar animation
+          var lb = document.getElementById("livesBar");
+          lb.style.animation = "none";
+          void lb.offsetWidth;
+          lb.style.animation = "fadeIn 0.5s 1s forwards";
+
           typewrite(
             document.getElementById("h2S4"),
             "Gosok Kartu Ini",
@@ -1611,7 +1720,7 @@
           );
           typewrite(
             document.getElementById("subS4"),
-            "Awas Kena Bom yaa! 🤣",
+            "Awas Kena Bom — 3 Nyawa! 💣❤️",
             35,
             700,
           );
@@ -1668,14 +1777,12 @@
           s6.appendChild(d);
         }
       }
-
       var envOpened = false;
       function openEnvelope() {
         if (envOpened) return;
         envOpened = true;
         document.getElementById("envelope").classList.add("open");
         document.getElementById("bukaBtn").style.opacity = "0";
-        // Confetti when opening envelope
         spawnConfetti(60);
         setTimeout(() => goTo(7), 900);
       }
@@ -1692,10 +1799,8 @@
           d.style.cssText = `left:${Math.random() * 95}%;animation-duration:${5 + Math.random() * 7}s;animation-delay:${Math.random() * 6}s;font-size:${12 + Math.random() * 14}px;`;
           s7.appendChild(d);
         }
-
-        // Reset avatars
-        var avL = document.getElementById("avLeft");
-        var avR = document.getElementById("avRight");
+        var avL = document.getElementById("avLeft"),
+          avR = document.getElementById("avRight");
         avL.style.cssText = "opacity:0;transform:scale(.6);animation:none;";
         avR.style.cssText = "opacity:0;transform:scale(.6);animation:none;";
         void avL.offsetWidth;
@@ -1704,35 +1809,25 @@
         avR.style.backgroundImage = "url('" + cfg.gifRight + "')";
         avL.style.animation = "popIn .5s .3s forwards";
         avR.style.animation = "popIn .5s .5s forwards";
-
-        // Reset letter card animation
         var card = s7.querySelector(".letter-card");
         card.style.animation = "none";
         void card.offsetWidth;
         card.style.animation =
           "cardSlideIn 0.7s cubic-bezier(0.22,1,0.36,1) 0.15s forwards";
-
-        // Reset sign & WA button
-        var signEl = document.getElementById("letterSign");
-        var waBtnWrap = document.getElementById("waBtnWrap");
+        var signEl = document.getElementById("letterSign"),
+          waBtnWrap = document.getElementById("waBtnWrap");
         signEl.classList.remove("show");
         waBtnWrap.classList.remove("show");
-
-        // Reset title
         var titleEl = document.getElementById("letterTitle");
         titleEl.style.opacity = "0";
         titleEl.innerHTML = "";
-
-        // Start typewriter letter after card slides in
         setTimeout(() => {
           typewriteLetterBody(
             document.getElementById("letterBody"),
             titleEl,
             signEl,
             () => {
-              // Smooth reveal of WA button
               waBtnWrap.classList.add("show");
-              // Extra confetti celebration
               spawnConfetti(40);
             },
           );
@@ -1744,6 +1839,8 @@
         var g = document.getElementById("grid");
         g.innerHTML = "";
         envOpened = false;
+
+        // Place bomb at random position (not same as previous? random is fine)
         var bombIdx = Math.floor(Math.random() * 16);
         var covers = [
           "#a78bfa",
@@ -1808,7 +1905,6 @@
         var ctx = canvas.getContext("2d");
         var W = canvas.width,
           H = canvas.height;
-
         ctx.fillStyle = coverColor;
         ctx.beginPath();
         ctx.roundRect(0, 0, W, H, 16);
@@ -1831,7 +1927,7 @@
         var painting = false,
           lastX = 0,
           lastY = 0,
-          gameOver = false;
+          thisCardDone = false;
 
         function getPos(e) {
           var r = canvas.getBoundingClientRect();
@@ -1842,8 +1938,9 @@
             };
           return { x: e.clientX - r.left, y: e.clientY - r.top };
         }
+
         function scratchAt(x, y, fx, fy) {
-          if (cardObj.revealed || gameOver) return;
+          if (cardObj.revealed || thisCardDone) return;
           ctx.beginPath();
           ctx.moveTo(fx, fy);
           ctx.lineTo(x, y);
@@ -1856,17 +1953,19 @@
           ctx.fill();
           checkReveal();
         }
+
         function checkReveal() {
-          if (cardObj.revealed || gameOver) return;
+          if (cardObj.revealed || thisCardDone) return;
           var data = ctx.getImageData(0, 0, W, H).data;
           var transparent = 0;
           for (var i = 3; i < data.length; i += 32) {
             if (data[i] < 128) transparent++;
           }
           var pct = transparent / (data.length / (4 * 8));
+
           if (isBomb) {
-            if (pct > 0.08) {
-              gameOver = true;
+            if (pct > 0.15) {
+              thisCardDone = true;
               cardObj.revealed = true;
               painting = false;
               hint.style.opacity = "0";
@@ -1876,10 +1975,11 @@
               base.textContent = "💥";
               base.style.background = "#ff4444";
               base.style.animation = "shake .4s";
-              setTimeout(() => goTo(5), 700);
+              // Delegate to lives system
+              onBombHit();
             }
           } else {
-            if (pct > 0.25) {
+            if (pct > 0.5) {
               cardObj.revealed = true;
               hint.style.opacity = "0";
               ctx.globalCompositeOperation = "destination-out";
