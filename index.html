@@ -215,32 +215,9 @@
         color: #ff6b6b;
         font-size: 14px;
         font-weight: 800;
-        margin-bottom: 10px;
+        margin-bottom: 14px;
       }
 
-      /* ===== LIVES BAR ===== */
-      #livesBar {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 14px;
-        opacity: 0;
-        animation: fadeIn 0.5s 1s forwards;
-      }
-      .life-heart {
-        font-size: 22px;
-        transition:
-          transform 0.3s,
-          opacity 0.3s,
-          filter 0.3s;
-        filter: drop-shadow(0 0 4px rgba(255, 100, 150, 0.6));
-      }
-      .life-heart.lost {
-        opacity: 0.18;
-        filter: none;
-        transform: scale(0.75);
-      }
       /* Bomb hit flash overlay */
       #bombFlash {
         position: fixed;
@@ -281,6 +258,40 @@
       #bombToast.show {
         transform: translateX(-50%) translateY(0);
         opacity: 1;
+      }
+
+      /* Bomb counter badge */
+      #bombCounter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1.5px solid rgba(255, 100, 100, 0.4);
+        border-radius: 20px;
+        padding: 6px 16px;
+        margin-bottom: 12px;
+        opacity: 0;
+        animation: fadeIn 0.5s 1s forwards;
+      }
+      #bombCounter span {
+        color: #fff;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.5px;
+      }
+      .bomb-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(255, 100, 100, 0.3);
+        border: 1.5px solid rgba(255, 100, 100, 0.5);
+        transition: all 0.3s;
+      }
+      .bomb-dot.hit {
+        background: #ff4444;
+        border-color: #ff4444;
+        box-shadow: 0 0 6px rgba(255, 68, 68, 0.8);
+        transform: scale(1.2);
       }
 
       .grid {
@@ -1071,10 +1082,13 @@
       <div id="s4" class="screen sky">
         <h2 id="h2S4"></h2>
         <p class="sub" id="subS4"></p>
-        <!-- LIVES BAR -->
-        <div id="livesBar">
-          <span class="life-heart" id="lh0">❤️</span>
-          <span class="life-heart" id="lh1">❤️</span>
+        <!-- BOMB COUNTER (replaces lives bar) -->
+        <div id="bombCounter">
+          <span>💣</span>
+          <div class="bomb-dot" id="bd0"></div>
+          <div class="bomb-dot" id="bd1"></div>
+          <div class="bomb-dot" id="bd2"></div>
+          <span id="bombCounterTxt">0 / 3 Bom</span>
         </div>
         <div class="grid" id="grid"></div>
         <div class="dots" style="margin-top: 24px">
@@ -1244,33 +1258,43 @@
           "Hii!! aku menang gosok kartunya 🎉 Congratulationn Sayanggkuuu 😍",
       };
 
-      /* ===== LIVES SYSTEM ===== */
-      var MAX_LIVES = 2;
-      var bombLives = MAX_LIVES;
-      var bombBlocked = false; // prevent double-trigger during animation
+      /* ===== BOMB COUNTER SYSTEM ===== */
+      // 3 bombs scattered across 16 cards
+      // Hit 1 bomb = still continue (show toast)
+      // Hit ALL 3 bombs = LOSE
+      // Reveal all non-bomb cards = WIN
+      var TOTAL_BOMBS = 3;
+      var bombsHit = 0;
+      var gameBlocked = false;
 
-      var toastMessages = [
-        "Aduh! Kena Bom!! 💥 Sisa {n} nyawa lagi!",
-        "Hampir!! 💥 Masih ada {n} kesempatan!",
-      ];
-
-      function updateLivesUI() {
-        for (var i = 0; i < MAX_LIVES; i++) {
-          var h = document.getElementById("lh" + i);
-          if (!h) continue;
-          if (i < bombLives) {
-            h.classList.remove("lost");
+      function updateBombCounterUI() {
+        for (var i = 0; i < TOTAL_BOMBS; i++) {
+          var dot = document.getElementById("bd" + i);
+          if (!dot) continue;
+          if (i < bombsHit) {
+            dot.classList.add("hit");
           } else {
-            h.classList.add("lost");
+            dot.classList.remove("hit");
           }
         }
+        var txt = document.getElementById("bombCounterTxt");
+        if (txt) txt.textContent = bombsHit + " / " + TOTAL_BOMBS + " Bom";
       }
 
-      function showBombToast(livesLeft) {
+      function showBombToast(bombsHitSoFar) {
         var toast = document.getElementById("bombToast");
+        var remaining = TOTAL_BOMBS - bombsHitSoFar;
         var msgs = [
-          "💥 BOOM!! Sisa " + livesLeft + " nyawa lagi!",
-          "😱 DUAR!! Masih " + livesLeft + " nyawa nih!",
+          "💥 BOOM!! " +
+            bombsHitSoFar +
+            " bom ketemu! Hati-hati " +
+            remaining +
+            " lagi!",
+          "😱 DUAR!! Sudah " +
+            bombsHitSoFar +
+            " bom — " +
+            remaining +
+            " bom tersisa!",
         ];
         toast.textContent = msgs[Math.floor(Math.random() * msgs.length)];
         toast.classList.add("show");
@@ -1288,12 +1312,12 @@
       }
 
       function onBombHit() {
-        if (bombBlocked) return;
-        bombBlocked = true;
+        if (gameBlocked) return;
+        gameBlocked = true;
 
-        bombLives--;
+        bombsHit++;
         bombFlash();
-        updateLivesUI();
+        updateBombCounterUI();
 
         // Shake the whole grid
         var grid = document.getElementById("grid");
@@ -1302,18 +1326,17 @@
           grid.style.animation = "";
         }, 450);
 
-        if (bombLives <= 0) {
-          // Game over — go to lose screen
+        if (bombsHit >= TOTAL_BOMBS) {
+          // All 3 bombs hit — LOSE
           setTimeout(function () {
             goTo(5);
           }, 700);
         } else {
-          // Show toast and rebuild grid after short delay
-          showBombToast(bombLives);
+          // Not all bombs hit yet — show toast, continue playing
+          showBombToast(bombsHit);
           setTimeout(function () {
-            buildGrid(); // Rebuild with new random bomb
-            bombBlocked = false;
-          }, 900);
+            gameBlocked = false;
+          }, 600);
         }
       }
 
@@ -1702,15 +1725,15 @@
           ]);
         }
         if (n === 4) {
-          // Reset lives
-          bombLives = MAX_LIVES;
-          bombBlocked = false;
-          updateLivesUI();
-          // Reset livesBar animation
-          var lb = document.getElementById("livesBar");
-          lb.style.animation = "none";
-          void lb.offsetWidth;
-          lb.style.animation = "fadeIn 0.5s 1s forwards";
+          // Reset bomb counter
+          bombsHit = 0;
+          gameBlocked = false;
+          updateBombCounterUI();
+          // Reset counter animation
+          var bc = document.getElementById("bombCounter");
+          bc.style.animation = "none";
+          void bc.offsetWidth;
+          bc.style.animation = "fadeIn 0.5s 1s forwards";
 
           typewrite(
             document.getElementById("h2S4"),
@@ -1720,7 +1743,7 @@
           );
           typewrite(
             document.getElementById("subS4"),
-            "Awas Kena Bom — 3 Nyawa! 💣❤️",
+            "Ada 3 Bom Tersembunyi — Jangan Kena! 💣",
             35,
             700,
           );
@@ -1730,7 +1753,7 @@
           resetAv("avS5", cfg.gifS5);
           typewrite(
             document.getElementById("h2S5"),
-            "Yaahh kena Boom!! 💥 🤣",
+            "Yaahh kena semua Bom!! 💥 🤣",
             35,
             300,
           );
@@ -1840,8 +1863,13 @@
         g.innerHTML = "";
         envOpened = false;
 
-        // Place bomb at random position (not same as previous? random is fine)
-        var bombIdx = Math.floor(Math.random() * 16);
+        // Place 3 bombs at random positions
+        var positions = [];
+        while (positions.length < TOTAL_BOMBS) {
+          var idx = Math.floor(Math.random() * 16);
+          if (!positions.includes(idx)) positions.push(idx);
+        }
+
         var covers = [
           "#a78bfa",
           "#60a5fa",
@@ -1863,7 +1891,7 @@
         var allCards = [];
 
         for (var i = 0; i < 16; i++) {
-          var isBomb = i === bombIdx;
+          var isBomb = positions.includes(i);
           var wrap = document.createElement("div");
           wrap.className = "card-wrap";
           wrap.style.animationDelay = i * 0.04 + "s";
@@ -1975,7 +2003,6 @@
               base.textContent = "💥";
               base.style.background = "#ff4444";
               base.style.animation = "shake .4s";
-              // Delegate to lives system
               onBombHit();
             }
           } else {
@@ -1984,6 +2011,7 @@
               hint.style.opacity = "0";
               ctx.globalCompositeOperation = "destination-out";
               ctx.fillRect(0, 0, W, H);
+              // Win: all non-bomb cards revealed
               var nonBombs = allCards.filter((c) => !c.isBomb);
               var allDone = nonBombs.every((c) => c.revealed);
               if (allDone) {
